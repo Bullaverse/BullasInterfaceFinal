@@ -1,0 +1,29 @@
+@font-face {
+  src: url(/Avenir-Light.ttf);
+  font-weight: 350;
+  font-family: "Avenir";
+}
+
+@font-face {
+  src: url(/Avenir-Black.ttf);
+  font-weight: 900;
+  font-family: "Avenir";
+}
+
+@font-face {
+  src: url(/Avenir-Heavy.ttf);
+  font-weight: 800;
+  font-family: "Avenir";
+}
+
+@font-face {
+  src: url(/Avenir-Regular.ttf);
+  font-weight: 500;
+  font-family: "Avenir";
+}
+
+@font-face {
+  src: url(/Ed.otf);
+  font-weight: 500;
+  font-family: "Ed";
+}
