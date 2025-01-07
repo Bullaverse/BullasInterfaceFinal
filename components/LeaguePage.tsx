@@ -126,6 +126,12 @@ const LeaguePage = () => {
       searchParams.get("discord") &&
       address
     ) {
+      console.log("Attempting to link discord with:", {
+        token: searchParams.get("token"),
+        discord: searchParams.get("discord"),
+        address,
+      });
+  
       fetch("/api/link-discord", {
         method: "POST",
         headers: {
@@ -138,13 +144,14 @@ const LeaguePage = () => {
         }),
       })
         .then(async (response) => {
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to link discord');
-          }
-          return response.json();
+          console.log("Response received:", response.status);
+          const data = await response.json();
+          console.log("Response data:", data);
+          if (!response.ok) throw new Error(data.message);
+          return data;
         })
         .then(() => {
+          console.log("Discord linked successfully");
           mutate();
           toast.success("Successfully linked discord account.");
         })
