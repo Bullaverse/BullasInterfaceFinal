@@ -101,110 +101,99 @@ const LeaguePage = () => {
   }, []);
 
   // If account is not registered then register user
-  import { useEffect } from "react";
-import { toast } from "sonner";
+  useEffect(() => {
+    const registerUser = async () => {
+      if (!data && address) {
+        try {
+          const response = await fetch("/api/user", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              address,
+            }),
+          });
 
-// Inside your LeaguePage component
-useEffect(() => {
-  const registerUser = async () => {
-    if (!data && address) {
-      try {
-        const response = await fetch("/api/user", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            address,
-          }),
-        });
+          const result = await response.json();
 
-        const result = await response.json();
-
-        if (response.ok) {
-          toast.success("User registered successfully.");
-          mutate();
-        } else {
-          // Handle specific error statuses
-          if (response.status === 409) {
-            toast.error("User already exists.");
+          if (response.ok) {
+            toast.success("User registered successfully.");
+            mutate();
           } else {
-            toast.error(result.message || "Failed to register user.");
+            // Handle specific error statuses
+            if (response.status === 409) {
+              toast.error("User already exists.");
+            } else {
+              toast.error(result.message || "Failed to register user.");
+            }
           }
+        } catch (error: any) {
+          console.error("Error registering user:", error);
+          toast.error("An unexpected error occurred.");
         }
-      } catch (error: any) {
-        console.error("Error registering user:", error);
-        toast.error("An unexpected error occurred.");
       }
-    }
-  };
+    };
 
-  registerUser();
-}, [address, data, mutate]);
-
+    registerUser();
+  }, [address, data, mutate]);
 
   // If account is registered and no discord account is linked then link discord account
-  import { useEffect } from "react";
-import { toast } from "sonner";
-import { useSearchParams } from "next/navigation";
+  useEffect(() => {
+    const linkDiscord = async () => {
+      if (
+        data &&
+        !data.discord_id &&
+        searchParams.get("token") &&
+        searchParams.get("discord") &&
+        address
+      ) {
+        const token = searchParams.get("token");
+        const discord = searchParams.get("discord");
 
-// Inside your LeaguePage component
-useEffect(() => {
-  const linkDiscord = async () => {
-    if (
-      data &&
-      !data.discord_id &&
-      searchParams.get("token") &&
-      searchParams.get("discord") &&
-      address
-    ) {
-      const token = searchParams.get("token");
-      const discord = searchParams.get("discord");
-
-      if (!token || !discord) {
-        toast.error("Missing token or Discord ID.");
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/link-discord", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            token,
-            discord,
-            address,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          console.log("Discord linked successfully");
-          toast.success("Successfully linked Discord account.");
-          mutate();
-        } else {
-          // Handle specific error statuses
-          if (response.status === 401) {
-            toast.error(result.message || "Unauthorized. Invalid token.");
-          } else if (response.status === 400) {
-            toast.error(result.message || "Bad request. Possible conflict.");
-          } else {
-            toast.error(result.message || "Failed to link Discord account.");
-          }
+        if (!token || !discord) {
+          toast.error("Missing token or Discord ID.");
+          return;
         }
-      } catch (error: any) {
-        console.error("Error linking Discord:", error);
-        toast.error("An unexpected error occurred.");
+
+        try {
+          const response = await fetch("/api/link-discord", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              token,
+              discord,
+              address,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            console.log("Discord linked successfully");
+            toast.success("Successfully linked Discord account.");
+            mutate();
+          } else {
+            // Handle specific error statuses
+            if (response.status === 401) {
+              toast.error(result.message || "Unauthorized. Invalid token.");
+            } else if (response.status === 400) {
+              toast.error(result.message || "Bad request. Possible conflict.");
+            } else {
+              toast.error(result.message || "Failed to link Discord account.");
+            }
+          }
+        } catch (error: any) {
+          console.error("Error linking Discord:", error);
+          toast.error("An unexpected error occurred.");
+        }
       }
-    }
-  };
+    };
 
-  linkDiscord();
-}, [address, data, searchParams, mutate]);
-
+    linkDiscord();
+  }, [address, data, searchParams, mutate]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
