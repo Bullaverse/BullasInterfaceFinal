@@ -21,12 +21,11 @@ import { FaXTwitter } from "react-icons/fa6";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { useAccount } from "wagmi";
-import dynamic from "next/dynamic";
-
+import dynamic from 'next/dynamic';
 // Dynamic import for Lottie
-const Lottie = dynamic(() => import("lottie-react"), {
+const Lottie = dynamic(() => import('lottie-react'), { 
   ssr: false,
-  loading: () => <div className="h-[550px] w-[550px]" />,
+  loading: () => <div className="h-[550px] w-[550px]" />
 });
 
 // Import animation data
@@ -35,9 +34,9 @@ import animationData from "../public/assets/bera.json";
 const LeaguePage = () => {
   const { address } = useAccount();
   const { connectWallet } = usePrivy();
-  const [gameState, setGameState] = useState<"default" | "started" | "completed">("default");
-
-  // Fetch user data
+  const [gameState, setGameState] = useState<
+    "default" | "started" | "completed"
+  >("default");
   const { data, mutate } = useSWR<{
     discord_id: string;
     address: string;
@@ -50,9 +49,8 @@ const LeaguePage = () => {
             address,
           })
       : null,
-    fetcher
+    fetcher,
   );
-
   const searchParams = useSearchParams();
 
   const { data: scoreData } = useSWR<{
@@ -61,20 +59,21 @@ const LeaguePage = () => {
   }>("/api/scores", fetcher);
 
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [gameTimeRemaining, setGameTimeRemaining] = useState<number>(GAME_DURATION_SECONDS);
+  const [gameTimeRemaining, setGameTimeRemaining] = useState<number>(
+    GAME_DURATION_SECONDS,
+  );
   const [points, setPoints] = useState<number>(0);
 
-  // Handle game timer
   useEffect(() => {
     if (gameState === "started") {
       const interval = setInterval(() => {
-        setGameTimeRemaining((t) => {
-          if (t <= 0) {
+        setGameTimeRemaining((currentGameTimeRemaining) => {
+          if (currentGameTimeRemaining <= 0) {
             clearInterval(interval);
             setGameState("completed");
-            return 0;
+            return 0; // Return the updated state to avoid going negative
           }
-          return t - 1;
+          return currentGameTimeRemaining - 1;
         });
       }, 1000);
 
@@ -82,7 +81,6 @@ const LeaguePage = () => {
     }
   }, [gameState]);
 
-  // After game completes, add points
   useEffect(() => {
     if (gameState === "completed" && address) {
       addPoints(address, convertPointsToHoney(points), currentTime);
@@ -90,93 +88,124 @@ const LeaguePage = () => {
     }
   }, [gameState]);
 
-  // Track current time
+  const hasPlayed = data?.last_played
+    ? hasPlayedInLast24Hours(currentTime, data?.last_played)
+    : false;
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Math.floor(Date.now() / 1000));
     }, 1000);
+
     return () => clearInterval(interval);
   }, []);
 
-  // Check if user has played in last 24h
-  const hasPlayed = data?.last_played
-    ? hasPlayedInLast24Hours(currentTime, data.last_played)
-    : false;
+  // If account is not registered then register user
+  import { useEffect } from "react";
+import { toast } from "sonner";
 
-  // If user doesn't exist in DB yet, create them
-  useEffect(() => {
+// Inside your LeaguePage component
+useEffect(() => {
+  const registerUser = async () => {
     if (!data && address) {
-      fetch("/api/user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ address }),
-      }).then(() => {
-        mutate();
-      });
-    }
-  }, [address, data]);
+      try {
+        const response = await fetch("/api/user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            address,
+          }),
+        });
 
-  // If user has no discord_id, and URL has token/discord, link them
-  useEffect(() => {
-    // 1. If we don't have user data yet, do nothing
-    if (!data) return;
-
-    // 2. If the user already has a discord_id, do NOT link again
-    if (data.discord_id) {
-      return;
-    }
-
-    // 3. Get token & discord from the URL
-    const tokenFromUrl = searchParams.get("token");
-    const discordIdFromUrl = searchParams.get("discord");
-
-    // 4. If either param is missing, do nothing
-    if (!tokenFromUrl || !discordIdFromUrl) return;
-
-    // 5. If there's no wallet address, do nothing
-    if (!address) return;
-
-    console.log("Attempting to link discord with:", {
-      token: tokenFromUrl,
-      discord: discordIdFromUrl,
-      address,
-    });
-
-    fetch("/api/link-discord", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        token: tokenFromUrl,
-        discord: discordIdFromUrl,
-        address,
-      }),
-    })
-      .then(async (response) => {
-        console.log("Response received:", response.status);
         const result = await response.json();
-        console.log("Response data:", result);
 
-        if (!response.ok) {
-          throw new Error(result.message || "Failed to link discord");
+        if (response.ok) {
+          toast.success("User registered successfully.");
+          mutate();
+        } else {
+          // Handle specific error statuses
+          if (response.status === 409) {
+            toast.error("User already exists.");
+          } else {
+            toast.error(result.message || "Failed to register user.");
+          }
         }
-        return result;
-      })
-      .then(() => {
-        console.log("Discord linked successfully");
-        mutate();
-        toast.success("Successfully linked discord account.");
-      })
-      .catch((err) => {
-        console.error("Link discord error:", err);
-        toast.error(err.message || "Failed to link discord account.");
-      });
-  }, [address, data, searchParams, mutate]);
+      } catch (error: any) {
+        console.error("Error registering user:", error);
+        toast.error("An unexpected error occurred.");
+      }
+    }
+  };
 
-  // Audio stuff
+  registerUser();
+}, [address, data, mutate]);
+
+
+  // If account is registered and no discord account is linked then link discord account
+  import { useEffect } from "react";
+import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
+
+// Inside your LeaguePage component
+useEffect(() => {
+  const linkDiscord = async () => {
+    if (
+      data &&
+      !data.discord_id &&
+      searchParams.get("token") &&
+      searchParams.get("discord") &&
+      address
+    ) {
+      const token = searchParams.get("token");
+      const discord = searchParams.get("discord");
+
+      if (!token || !discord) {
+        toast.error("Missing token or Discord ID.");
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/link-discord", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token,
+            discord,
+            address,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          console.log("Discord linked successfully");
+          toast.success("Successfully linked Discord account.");
+          mutate();
+        } else {
+          // Handle specific error statuses
+          if (response.status === 401) {
+            toast.error(result.message || "Unauthorized. Invalid token.");
+          } else if (response.status === 400) {
+            toast.error(result.message || "Bad request. Possible conflict.");
+          } else {
+            toast.error(result.message || "Failed to link Discord account.");
+          }
+        }
+      } catch (error: any) {
+        console.error("Error linking Discord:", error);
+        toast.error("An unexpected error occurred.");
+      }
+    }
+  };
+
+  linkDiscord();
+}, [address, data, searchParams, mutate]);
+
+
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -197,14 +226,10 @@ const LeaguePage = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Twitter share
-  const tweetText = `I MILKED THE DIGUSTING FKN HOLY BERA AND GOT ${convertPointsToHoney(
-    points
-  )} MOOLA 🤮 BULLAS OR BERAS, CHOOSE YOUR TEAM AND JOIN @THEBULLAS_ MOOLAWARS NOW!\n\nhttps://www.bullas.xyz/`;
+  const tweetText = `I MILKED THE DIGUSTING FKN HOLY BERA AND GOT ${convertPointsToHoney(points)} MOOLA 🤮 BULLAS OR BERAS, CHOOSE YOUR TEAM AND JOIN @THEBULLAS_ MOOLAWARS NOW!\n\nhttps://www.bullas.xyz/`;
   const text = encodeURIComponent(tweetText);
   const tweetUrl = `https://twitter.com/intent/tweet?text=${text}`;
 
-  // Render the game UI
   return (
     <div className="flex h-auto w-full flex-col items-center justify-start bg-[#275933] md:h-screen">
       <div className="relative flex h-full w-full max-w-[112rem] flex-col items-center justify-start overflow-hidden bg-[#275933] ">
@@ -307,6 +332,9 @@ const LeaguePage = () => {
                       />
                       Wank Da Bear Game
                     </h1>
+                    {/* <p className="text-center text-lg font-light italic text-white md:text-xl">
+                      Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                    </p> */}
                     <div className="absolute bottom-[-20px]">
                       <Lottie
                         animationData={animationData}
@@ -342,8 +370,9 @@ const LeaguePage = () => {
                               >
                                 <p className="uppercase">
                                   {calculateTimeRemaining(
-                                    (data?.last_played ?? 0) + TIME_UNTIL_NEXT_GAME,
-                                    currentTime
+                                    (data?.last_played ?? 0) +
+                                      TIME_UNTIL_NEXT_GAME,
+                                    currentTime,
                                   )}
                                 </p>
                               </button>
@@ -378,12 +407,24 @@ const LeaguePage = () => {
                       className="object-contain"
                     />
                     <div className="absolute right-6 top-1/2 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border-[1px] border-[#F74E2D57] bg-[#F74E2D31] p-4 py-2 font-ed text-5xl font-black not-italic text-[#F74E2D]">
-                      <p className="text-xl font-black not-italic text-[#F74E2D]">{points}</p>
+                      <p className="text-xl font-black not-italic text-[#F74E2D]">
+                        {points}
+                      </p>
                     </div>
                     <div className="mr-4 flex flex-row items-center justify-center space-x-2 italic md:mr-8">
                       <p>The Bullas</p>
-                      <Image src="/assets/milk2.png" alt="" width={24} height={24} className="object-contain" />
-                      <p>{scoreData?.bullas && (scoreData?.bullas / 1000).toFixed(2)}mL</p>
+                      <Image
+                        src="/assets/milk2.png"
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="object-contain"
+                      />
+                      <p>
+                        {scoreData?.bullas &&
+                          (scoreData?.bullas / 1000).toFixed(2)}
+                        mL
+                      </p>
                     </div>
                     <div className="flex w-[132px] items-center justify-center rounded-full border-[1px] border-[#F74E2D57] bg-[#F74E2D31] px-4 py-2 font-ed text-5xl font-black not-italic text-[#F74E2D]">
                       {Math.floor(gameTimeRemaining / 60)}:
@@ -391,8 +432,18 @@ const LeaguePage = () => {
                     </div>
                     <div className="ml-4 flex flex-row items-center justify-center space-x-2 italic md:ml-8">
                       <p>The Beras</p>
-                      <Image src="/assets/milk2.png" alt="" width={24} height={24} className="object-contain" />
-                      <p>{scoreData?.beras && (scoreData?.beras / 1000).toFixed(2)}mL</p>
+                      <Image
+                        src="/assets/milk2.png"
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="object-contain"
+                      />
+                      <p>
+                        {scoreData?.beras &&
+                          (scoreData?.beras / 1000).toFixed(2)}
+                        mL
+                      </p>
                     </div>
                   </div>
                   <div className="mt-12 flex h-full w-full flex-col items-center justify-start rounded-xl bg-white/5">
@@ -492,11 +543,15 @@ const LeaguePage = () => {
                                   className="object-contain"
                                 />
                                 <p className="text-white">
-                                  {scoreData?.beras && (scoreData?.beras / 1000).toFixed(2)}mL
+                                  {scoreData?.beras &&
+                                    (scoreData?.beras / 1000).toFixed(2)}
+                                  mL
                                 </p>
                               </div>
                               <div className="flex flex-row items-center justify-center space-x-3 text-xl italic">
-                                <p className="font-medium text-[#FEF7E7]">The Beras</p>
+                                <p className="font-medium text-[#FEF7E7]">
+                                  The Beras
+                                </p>
                                 <Image
                                   src="/assets/milk.png"
                                   alt=""
@@ -505,12 +560,19 @@ const LeaguePage = () => {
                                   className="object-contain"
                                 />
                                 <p className="font-bold text-white">
-                                  {scoreData?.beras && (scoreData?.beras / 1000).toFixed(2)}mL
+                                  {scoreData?.beras &&
+                                    (scoreData?.beras / 1000).toFixed(2)}
+                                  mL
                                 </p>
                               </div>
                             </div>
                             <div className="relative aspect-square h-36 w-36 md:h-56 md:w-56">
-                              <Image fill alt="" src="/assets/the_beras_logo.png" className="object-cover" />
+                              <Image
+                                fill
+                                alt=""
+                                src="/assets/the_beras_logo.png"
+                                className="object-cover"
+                              />
                             </div>
                           </div>
                           <div className="relative flex w-full flex-row items-center justify-center gap-x-4 p-8 md:w-1/2 md:justify-start md:gap-x-12">
@@ -526,11 +588,18 @@ const LeaguePage = () => {
                               </div>
                             )}
                             <div className="relative aspect-square h-36 w-36 md:h-56 md:w-56">
-                              <Image fill alt="" src="/assets/the_bullas_logo.png" className="object-cover" />
+                              <Image
+                                fill
+                                alt=""
+                                src="/assets/the_bullas_logo.png"
+                                className="object-cover"
+                              />
                             </div>
                             <div className="flex flex-col items-start justify-center">
                               <div className="mb-4 flex flex-row items-center justify-center space-x-3 text-xl italic">
-                                <p className="font-medium text-[#FEF7E7]">The Bullas</p>
+                                <p className="font-medium text-[#FEF7E7]">
+                                  The Bullas
+                                </p>
                                 <Image
                                   src="/assets/milk.png"
                                   alt=""
@@ -539,7 +608,9 @@ const LeaguePage = () => {
                                   className="object-contain"
                                 />
                                 <p className="font-bold text-white">
-                                  {scoreData?.bullas && (scoreData?.bullas / 1000).toFixed(2)}mL
+                                  {scoreData?.bullas &&
+                                    (scoreData?.bullas / 1000).toFixed(2)}
+                                  mL
                                 </p>
                               </div>
                               <div className="flex flex-row items-center justify-center space-x-3 text-xl italic">
@@ -552,7 +623,9 @@ const LeaguePage = () => {
                                   className="object-contain"
                                 />
                                 <p className="text-white">
-                                  {scoreData?.bullas && (scoreData?.bullas / 1000).toFixed(2)}mL
+                                  {scoreData?.bullas &&
+                                    (scoreData?.bullas / 1000).toFixed(2)}
+                                  mL
                                 </p>
                               </div>
                             </div>
@@ -581,6 +654,7 @@ const LeaguePage = () => {
                         className="absolute right-[-36px] top-[-48px] hidden object-contain md:flex"
                       />
                     </div>
+
                     <div className="group relative z-50 w-auto">
                       <button
                         onClick={() => window.open(tweetUrl, "_blank")}
@@ -599,7 +673,9 @@ const LeaguePage = () => {
                     <div className="relative mb-6 flex flex-row items-center justify-center gap-x-1">
                       <p className=" text-lg font-light italic text-black md:text-xl ">
                         Building on{" "}
-                        <span className="font-bold text-[#F74E2D]">Berachain</span>
+                        <span className="font-bold text-[#F74E2D]">
+                          Berachain
+                        </span>
                       </p>
                       <Image
                         src="/assets/berachain.png"
