@@ -3,7 +3,6 @@ import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-// Schema for validating discord link request
 const registerDiscordSchema = z.object({
   token: z.string(),
   discord: z.string(),
@@ -18,7 +17,6 @@ export async function POST(req: NextRequest) {
 
     // Validate request data
     const { token, address, discord } = registerDiscordSchema.parse(body);
-    console.log("Validated data:", { token, address, discord });
 
     // Check if token exists and is valid
     const { data: tokenData, error: tokenError } = await supabase
@@ -46,46 +44,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if address is already linked to another Discord account
-    const { data: existingAddress, error: existingAddressError } = await supabase
+    // First, try to update the existing user
+    const { data: updateData, error: updateError } = await supabase
       .from("users")
-      .select("discord_id")
+      .update({ discord_id: discord })
       .eq("address", address)
-      .not("discord_id", "eq", discord)
+      .select()
       .single();
 
-    if (existingAddressError && existingAddressError.code !== "PGRST116") {
-      console.error("Error checking address:", existingAddressError);
-      return NextResponse.json(
-        { message: "Database error" },
-        { status: 500 }
-      );
-    }
+    console.log("Update attempt result:", { updateData, updateError });
 
-    if (existingAddress) {
-      return NextResponse.json(
-        { message: "Address already linked to another Discord account" },
-        { status: 400 }
-      );
-    }
-
-    // Update user record
-    const { error: userError } = await supabase
-      .from("users")
-      .upsert(
-        {
+    if (updateError) {
+      // If user doesn't exist, create a new one
+      const { error: insertError } = await supabase
+        .from("users")
+        .insert({
           address,
           discord_id: discord,
-        },
-        { onConflict: "discord_id" }
-      );
+          points: 0,
+          last_played: Math.floor(Date.now() / 1000),
+          team: null
+        });
 
-    if (userError) {
-      console.error("Failed to update user:", userError);
-      return NextResponse.json(
-        { message: "Failed to update user" },
-        { status: 500 }
-      );
+      if (insertError) {
+        console.error("Failed to create user:", insertError);
+        return NextResponse.json(
+          { message: "Failed to link Discord account", error: insertError.message },
+          { status: 500 }
+        );
+      }
     }
 
     // Mark token as used
@@ -96,22 +83,18 @@ export async function POST(req: NextRequest) {
 
     if (tokenUpdateError) {
       console.error("Failed to update token:", tokenUpdateError);
-      return NextResponse.json(
-        { message: "Failed to update token" },
-        { status: 500 }
-      );
+      // Don't return error here as the link was successful
     }
 
-    // Return success
-    return NextResponse.json({ message: "Discord linked successfully" });
+    return NextResponse.json({ 
+      message: "Discord linked successfully",
+      data: updateData || { address, discord_id: discord }
+    });
 
   } catch (error: any) {
     console.error("POST /api/link-discord error:", error);
     return NextResponse.json(
-      { 
-        message: "Internal server error",
-        error: error.message
-      },
+      { message: "Internal server error", error: error.message },
       { status: 500 }
     );
   }
