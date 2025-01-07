@@ -13,15 +13,16 @@ const nextConfig = {
     appDir: true,
   },
   output: "standalone",
-
   
+  // function:
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/(.*)", // apply to all routes
         headers: [
           {
             key: "Content-Security-Policy",
+            // includes 'unsafe-eval' so WASM can compile
             value: `
               default-src 'self';
               script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io;
@@ -34,7 +35,7 @@ const nextConfig = {
     ];
   },
 
-  
+  // keep your rewrites
   async rewrites() {
     return [
       {
