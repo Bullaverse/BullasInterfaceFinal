@@ -14,19 +14,22 @@ const nextConfig = {
   },
   output: "standalone",
   
-  // function:
   async headers() {
     return [
       {
-        source: "/(.*)", // apply to all routes
+        source: "/(.*)",
         headers: [
           {
             key: "Content-Security-Policy",
-            // includes 'unsafe-eval' so WASM can compile
             value: `
               default-src 'self';
               script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io;
               style-src 'self' 'unsafe-inline';
+              connect-src 'self' https://auth.privy.io https://*.privy.io https://*.walletconnect.org https://*.walletconnect.com wss://*.walletconnect.org wss://*.walletconnect.com https://*.ethereum.org;
+              frame-src 'self' https://auth.privy.io https://*.privy.io;
+              img-src 'self' data: https: blob:;
+              media-src 'self';
+              font-src 'self';
               frame-ancestors 'self';
             `.replace(/\s{2,}/g, " ").trim(),
           },
@@ -35,7 +38,6 @@ const nextConfig = {
     ];
   },
 
-  // keep your rewrites
   async rewrites() {
     return [
       {
