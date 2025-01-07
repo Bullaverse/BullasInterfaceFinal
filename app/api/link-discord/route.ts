@@ -1,23 +1,26 @@
-import { supabase } from "@/lib/supabase"; // Adjust path as needed
+// File: app/api/link-discord/route.ts
+import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+// Schema for validating discord link request
 const registerDiscordSchema = z.object({
   token: z.string(),
   discord: z.string(),
-  address: z.string(),
+  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Read request body exactly once
+    // Get and log request body
     const body = await req.json();
     console.log("POST /api/link-discord called with body:", body);
 
-    // 2. Validate with Zod
+    // Validate request data
     const { token, address, discord } = registerDiscordSchema.parse(body);
+    console.log("Validated data:", { token, address, discord });
 
-    // 3. Fetch token from DB
+    // Check if token exists and is valid
     const { data: tokenData, error: tokenError } = await supabase
       .from("tokens")
       .select("used")
@@ -25,16 +28,25 @@ export async function POST(req: NextRequest) {
       .eq("discord_id", discord)
       .single();
 
+    console.log("Token check response:", { tokenData, tokenError });
+
     if (tokenError || !tokenData) {
-      return NextResponse.json({ message: "Invalid token" }, { status: 401 });
+      console.error("Token verification failed:", tokenError);
+      return NextResponse.json(
+        { message: "Invalid token" },
+        { status: 401 }
+      );
     }
 
-    // 4. Check if token was already used
+    // Check if token was already used
     if (tokenData.used) {
-      return NextResponse.json({ message: "Token already used" }, { status: 401 });
+      return NextResponse.json(
+        { message: "Token already used" },
+        { status: 401 }
+      );
     }
 
-    // 5. Ensure this wallet address isn’t linked to a different Discord ID
+    // Check if address is already linked to another Discord account
     const { data: existingAddress, error: existingAddressError } = await supabase
       .from("users")
       .select("discord_id")
@@ -42,9 +54,12 @@ export async function POST(req: NextRequest) {
       .not("discord_id", "eq", discord)
       .single();
 
-    if (existingAddressError) {
-      console.error("Error verifying address:", existingAddressError);
-      return NextResponse.json({ message: "Database error" }, { status: 500 });
+    if (existingAddressError && existingAddressError.code !== "PGRST116") {
+      console.error("Error checking address:", existingAddressError);
+      return NextResponse.json(
+        { message: "Database error" },
+        { status: 500 }
+      );
     }
 
     if (existingAddress) {
@@ -54,7 +69,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Upsert user row (onConflict ensures we only have one row per discord_id)
+    // Update user record
     const { error: userError } = await supabase
       .from("users")
       .upsert(
@@ -66,25 +81,38 @@ export async function POST(req: NextRequest) {
       );
 
     if (userError) {
-      console.error("Failed to upsert user:", userError);
-      return NextResponse.json({ message: "Failed to update user" }, { status: 500 });
+      console.error("Failed to update user:", userError);
+      return NextResponse.json(
+        { message: "Failed to update user" },
+        { status: 500 }
+      );
     }
 
-    // 7. Mark token as used
+    // Mark token as used
     const { error: tokenUpdateError } = await supabase
       .from("tokens")
       .update({ used: true })
       .eq("token", token);
 
     if (tokenUpdateError) {
-      console.error("Failed to update token usage:", tokenUpdateError);
-      return NextResponse.json({ message: "Failed to update token usage" }, { status: 500 });
+      console.error("Failed to update token:", tokenUpdateError);
+      return NextResponse.json(
+        { message: "Failed to update token" },
+        { status: 500 }
+      );
     }
 
-    // 8. Success
+    // Return success
     return NextResponse.json({ message: "Discord linked successfully" });
+
   } catch (error: any) {
-    console.error("Link discord error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("POST /api/link-discord error:", error);
+    return NextResponse.json(
+      { 
+        message: "Internal server error",
+        error: error.message
+      },
+      { status: 500 }
+    );
   }
 }

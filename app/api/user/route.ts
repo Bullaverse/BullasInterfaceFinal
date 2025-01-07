@@ -1,9 +1,9 @@
-// pages/api/user.ts (Assuming this is the correct path)
-import { supabase } from "@/lib/supabase"; // Using the existing supabase.ts
+// File: app/api/user/route.ts
+import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-// Define the schema for user validation
+// Schema for validating Ethereum addresses
 const userSchema = z.object({
   address: z
     .string()
@@ -12,65 +12,96 @@ const userSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Extract 'address' from query string
+    // Get address from query params
     const addressParam = req.nextUrl.searchParams.get("address");
+    
+    // Check if address exists
+    if (!addressParam) {
+      return NextResponse.json(
+        { message: "Address parameter is required" }, 
+        { status: 400 }
+      );
+    }
 
-    // 2. Validate address
+    // Validate address format
     const { address } = userSchema.parse({ address: addressParam });
-
+    
     console.log("GET /api/user called with address:", address);
 
-    // 3. Fetch user row
+    // Query Supabase
     const { data, error } = await supabase
       .from("users")
       .select("discord_id, address, points, last_played, team")
       .eq("address", address)
       .single();
 
+    // Log response for debugging
+    console.log("Supabase response:", { data, error });
+
     if (error) {
-      if (error.code === "PGRST116") { // No rows found
-        return NextResponse.json({ message: "User not found" }, { status: 404 });
-      }
       console.error("Database error:", error);
-      return NextResponse.json({ message: "Database error" }, { status: 500 });
+      
+      // Handle "no rows found" case
+      if (error.code === "PGRST116") {
+        return NextResponse.json(
+          { message: "User not found" },
+          { status: 404 }
+        );
+      }
+      
+      // Handle other database errors
+      return NextResponse.json(
+        { message: "Database error", error: error.message },
+        { status: 500 }
+      );
     }
 
-    // 4. Success
-    return NextResponse.json(data, { status: 200 });
+    // Return user data if found
+    return NextResponse.json(data);
+
   } catch (error: any) {
-    console.error("GET user error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("GET /api/user error:", error);
+    return NextResponse.json(
+      { message: "Internal server error", error: error.message },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Read request body once
+    // Get request body
     const body = await req.json();
+    console.log("POST /api/user called with body:", body);
 
-    // 2. Validate with Zod
+    // Validate address
     const { address } = userSchema.parse(body);
 
-    console.log("POST /api/user called to create user with address:", address);
-
-    // 3. Check if user with this address already exists
+    // Check if user exists
     const { data: existingUser, error: existingUserError } = await supabase
       .from("users")
       .select("address")
       .eq("address", address)
-      .maybeSingle(); // Use maybeSingle to avoid throwing an error if no user is found
+      .maybeSingle();
 
-    if (existingUserError && existingUserError.code !== "PGRST116") { // Handle unexpected errors
-      console.error("Database error during user existence check:", existingUserError);
-      return NextResponse.json({ message: "Database error" }, { status: 500 });
+    // Handle database errors
+    if (existingUserError && existingUserError.code !== "PGRST116") {
+      console.error("Database error checking user:", existingUserError);
+      return NextResponse.json(
+        { message: "Database error" },
+        { status: 500 }
+      );
     }
 
+    // If user exists, return conflict
     if (existingUser) {
-      console.log("User already exists:", address);
-      return NextResponse.json({ message: "User already exists" }, { status: 409 });
+      return NextResponse.json(
+        { message: "User already exists" },
+        { status: 409 }
+      );
     }
 
-    // 4. Insert new user
+    // Insert new user
     const { error: insertError } = await supabase
       .from("users")
       .insert({
@@ -81,16 +112,24 @@ export async function POST(req: NextRequest) {
       });
 
     if (insertError) {
-      console.error("Database error during user insertion:", insertError);
-      return NextResponse.json({ message: "Failed to create user" }, { status: 500 });
+      console.error("Error creating user:", insertError);
+      return NextResponse.json(
+        { message: "Failed to create user" },
+        { status: 500 }
+      );
     }
 
-    console.log("User created successfully:", address);
+    // Return success
+    return NextResponse.json(
+      { message: "User created successfully" },
+      { status: 201 }
+    );
 
-    // 5. Success
-    return NextResponse.json({ message: "User created successfully" }, { status: 201 });
   } catch (error: any) {
-    console.error("POST user error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("POST /api/user error:", error);
+    return NextResponse.json(
+      { message: "Internal server error", error: error.message },
+      { status: 500 }
+    );
   }
 }
