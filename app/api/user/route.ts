@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+
 const userSchema = z.object({
   address: z.string().min(1, "Address is required"),
 });
