@@ -2,7 +2,6 @@ import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-
 const userSchema = z.object({
   address: z.string().min(1, "Address is required"),
 });
@@ -30,9 +29,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ message: error.errors[0].message }, { status: 400 });
-    }
     console.error("GET user error:", error);
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
@@ -60,7 +56,8 @@ export async function POST(req: NextRequest) {
       .upsert({
         address,
         points: 0,
-        last_played: new Date().toISOString(),
+        last_played: Math.floor(Date.now() / 1000),
+        team: null
       });
 
     if (error) {
@@ -70,9 +67,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: "User created successfully" });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ message: error.errors[0].message }, { status: 400 });
-    }
     console.error("POST user error:", error);
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
