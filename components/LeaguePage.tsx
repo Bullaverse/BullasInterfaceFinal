@@ -137,12 +137,20 @@ const LeaguePage = () => {
           address,
         }),
       })
-        .then((response) => {
+        .then(async (response) => {
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to link discord');
+          }
+          return response.json();
+        })
+        .then(() => {
           mutate();
           toast.success("Successfully linked discord account.");
         })
         .catch((err) => {
-          toast.error("Failed to link discord account.");
+          console.error("Link discord error:", err);
+          toast.error(err.message || "Failed to link discord account.");
         });
     }
   }, [address, data, searchParams]);
