@@ -3,7 +3,6 @@ import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-// Schema for validating Ethereum addresses
 const userSchema = z.object({
   address: z
     .string()
@@ -12,13 +11,10 @@ const userSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    // Get address from query params
     const addressParam = req.nextUrl.searchParams.get("address");
-    
-    // Check if address exists
     if (!addressParam) {
       return NextResponse.json(
-        { message: "Address parameter is required" }, 
+        { message: "Address parameter is required" },
         { status: 400 }
       );
     }
@@ -26,39 +22,31 @@ export async function GET(req: NextRequest) {
     // Validate address format
     const { address } = userSchema.parse({ address: addressParam });
     
-    console.log("GET /api/user called with address:", address);
-
-    // Query Supabase
+    // Use maybeSingle() instead of single() to avoid PGRST116 error
     const { data, error } = await supabase
       .from("users")
       .select("discord_id, address, points, last_played, team")
       .eq("address", address)
-      .single();
+      .maybeSingle();
 
-    // Log response for debugging
-    console.log("Supabase response:", { data, error });
+    console.log("Supabase query result:", { data, error });
 
     if (error) {
       console.error("Database error:", error);
-      
-      // Handle "no rows found" case
-      if (error.code === "PGRST116") {
-        return NextResponse.json(
-          { message: "User not found" },
-          { status: 404 }
-        );
-      }
-      
-      // Handle other database errors
       return NextResponse.json(
         { message: "Database error", error: error.message },
         { status: 500 }
       );
     }
 
-    // Return user data if found
-    return NextResponse.json(data);
+    if (!data) {
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
+    }
 
+    return NextResponse.json(data);
   } catch (error: any) {
     console.error("GET /api/user error:", error);
     return NextResponse.json(
@@ -70,30 +58,26 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get request body
     const body = await req.json();
-    console.log("POST /api/user called with body:", body);
+    console.log("POST /api/user request body:", body);
 
-    // Validate address
     const { address } = userSchema.parse(body);
 
-    // Check if user exists
-    const { data: existingUser, error: existingUserError } = await supabase
+    // Check if user exists using maybeSingle()
+    const { data: existingUser, error: checkError } = await supabase
       .from("users")
       .select("address")
       .eq("address", address)
       .maybeSingle();
 
-    // Handle database errors
-    if (existingUserError && existingUserError.code !== "PGRST116") {
-      console.error("Database error checking user:", existingUserError);
+    if (checkError) {
+      console.error("Error checking for existing user:", checkError);
       return NextResponse.json(
         { message: "Database error" },
         { status: 500 }
       );
     }
 
-    // If user exists, return conflict
     if (existingUser) {
       return NextResponse.json(
         { message: "User already exists" },
@@ -101,7 +85,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Insert new user
+    // Create new user
     const { error: insertError } = await supabase
       .from("users")
       .insert({
@@ -109,22 +93,33 @@ export async function POST(req: NextRequest) {
         points: 0,
         last_played: Math.floor(Date.now() / 1000),
         team: null,
+        discord_id: null // Explicitly set to null initially
       });
 
     if (insertError) {
       console.error("Error creating user:", insertError);
       return NextResponse.json(
-        { message: "Failed to create user" },
+        { message: "Failed to create user", error: insertError.message },
         { status: 500 }
       );
     }
 
-    // Return success
-    return NextResponse.json(
-      { message: "User created successfully" },
-      { status: 201 }
-    );
+    // Fetch the newly created user to return
+    const { data: newUser, error: fetchError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("address", address)
+      .maybeSingle();
 
+    if (fetchError || !newUser) {
+      console.error("Error fetching new user:", fetchError);
+      return NextResponse.json(
+        { message: "User created but failed to fetch" },
+        { status: 201 }
+      );
+    }
+
+    return NextResponse.json(newUser, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/user error:", error);
     return NextResponse.json(
