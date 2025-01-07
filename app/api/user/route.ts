@@ -7,6 +7,7 @@ const userSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
+  console.log("GET /api/user called with params:", req.nextUrl.searchParams.toString());
   try {
     const { address } = userSchema.parse({
       address: req.nextUrl.searchParams.get("address"),

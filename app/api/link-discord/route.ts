@@ -9,6 +9,7 @@ const registerDiscordSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  console.log("POST /api/link-discord called with body:", await req.json());
   try {
     const { token, address, discord } = registerDiscordSchema.parse(
       await req.json(),
