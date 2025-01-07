@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+const registerDiscordSchema = z.object({
+  token: z.string(),
+  discord: z.string(),
+  address: z.string(),
+});
 export async function POST(req: NextRequest) {
   try {
     const { token, address, discord } = registerDiscordSchema.parse(
