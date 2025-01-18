@@ -37,5 +37,5 @@ export const calculateTimeRemaining = (
 };
 
 export const convertPointsToHoney = (points: number): number => {
-  return Math.min(points / 100, 2);
+  return Math.min(points / 100, 0);
 };

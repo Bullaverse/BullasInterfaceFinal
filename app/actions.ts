@@ -28,7 +28,7 @@ export async function addPoints(
   const { data: user, error: userError } = await supabase
     .from("users")
     .update({
-      points: data.points + points,
+      //points: data.points + points,
       last_played: Math.floor(Date.now() / 1000),
     })
     .eq("address", address);
